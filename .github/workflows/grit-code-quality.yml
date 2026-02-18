@@ -1,0 +1,64 @@
+name: grit-code-quality
+on:
+  workflow_call:
+    inputs:
+      grit-patterns:
+        description: 'Grit patterns to apply'
+        required: false
+        type: string
+        default: 'standard'
+      target-branch-prefix:
+        description: 'Prefix for created branch'
+        required: false
+        type: string
+        default: 'grit-fixes'
+      auto-push:
+        description: 'Auto-push changes'
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+permissions:
+  contents: write
+jobs:
+  grit-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - name: Install Grit
+        run: |
+          curl -fsSL https://docs.grit.io/install | bash
+          echo "$HOME/.grit/bin" >> $GITHUB_PATH
+      - name: Run Grit Check
+        id: grit-check
+        continue-on-error: true
+        run: |
+          grit check --level error || echo "GRIT_ERRORS=true" >> $GITHUB_OUTPUT
+      - name: Apply Grit Fixes
+        if: steps.grit-check.outputs.GRIT_ERRORS == 'true'
+        uses: Wandalen/wretry.action@v3.8.0
+        with:
+          attempt_limit: 3
+          attempt_delay: 2000
+          command: grit apply --force
+      - name: Create Fix Branch
+        if: steps.grit-check.outputs.GRIT_ERRORS == 'true' && inputs.auto-push
+        run: |
+          BRANCH="${{ inputs.target-branch-prefix }}-$(date +%Y%m%d-%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: apply Grit fixes [automated]" || exit 0
+      - name: Push Changes
+        if: steps.grit-check.outputs.GRIT_ERRORS == 'true' && inputs.auto-push
+        uses: Wandalen/wretry.action@v3.8.0
+        with:
+          attempt_limit: 3
+          attempt_delay: 5000
+          command: git push origin HEAD
