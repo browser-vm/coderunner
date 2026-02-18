@@ -11,7 +11,7 @@ permissions:
 env:
   TARGET_BRANCH_PREFIX: 'grit-fixes'
   # Added the missing pattern configuration here
-  GRIT_PATTERN: 'standard' 
+  GRIT_PATTERN: 'typescript' 
 
 jobs:
   grit-quality:
