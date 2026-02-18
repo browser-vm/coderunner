@@ -1,44 +1,38 @@
 name: grit-code-quality
+
 on:
-  workflow_call:
-    inputs:
-      grit-patterns:
-        description: 'Grit patterns to apply'
-        required: false
-        type: string
-        default: 'standard'
-      target-branch-prefix:
-        description: 'Prefix for created branch'
-        required: false
-        type: string
-        default: 'grit-fixes'
-      auto-push:
-        description: 'Auto-push changes'
-        required: false
-        type: boolean
-        default: true
-    secrets:
-      THE_GITHUB_TOKEN:
-        required: true
+  push:
+    branches: ["main"] # Add other branches here if needed (e.g., "develop")
+  # Optional: Allows you to still run this manually if needed
+  workflow_dispatch:
+
 permissions:
   contents: write
+
+env:
+  # Configuration that was previously handled via inputs
+  TARGET_BRANCH_PREFIX: 'grit-fixes'
+
 jobs:
   grit-quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.THE_GITHUB_TOKEN }} #Implement newer token
+          token: ${{ secrets.THE_GITHUB_TOKEN }}
           fetch-depth: 0
+
       - name: Install Grit
         run: |
           curl -fsSL https://docs.grit.io/install | bash
           echo "$HOME/.grit/bin" >> $GITHUB_PATH
+
       - name: Run Grit Check
         id: grit-check
         continue-on-error: true
         run: |
           grit check --level error || echo "GRIT_ERRORS=true" >> $GITHUB_OUTPUT
+
       - name: Apply Grit Fixes
         if: steps.grit-check.outputs.GRIT_ERRORS == 'true'
         uses: Wandalen/wretry.action@v3.8.0
@@ -46,17 +40,20 @@ jobs:
           attempt_limit: 3
           attempt_delay: 2000
           command: grit apply --force
+
       - name: Create Fix Branch
-        if: steps.grit-check.outputs.GRIT_ERRORS == 'true' && inputs.auto-push
+        if: steps.grit-check.outputs.GRIT_ERRORS == 'true'
         run: |
-          BRANCH="${{ inputs.target-branch-prefix }}-$(date +%Y%m%d-%H%M%S)"
+          BRANCH="${{ env.TARGET_BRANCH_PREFIX }}-$(date +%Y%m%d-%H%M%S)"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git add -A
-          git commit -m "chore: apply Grit fixes [automated]" || exit 0
+          # Added [skip ci] to prevent infinite loops
+          git commit -m "chore: apply Grit fixes [automated] [skip ci]" || exit 0
+
       - name: Push Changes
-        if: steps.grit-check.outputs.GRIT_ERRORS == 'true' && inputs.auto-push
+        if: steps.grit-check.outputs.GRIT_ERRORS == 'true'
         uses: Wandalen/wretry.action@v3.8.0
         with:
           attempt_limit: 3
