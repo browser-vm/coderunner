@@ -1,0 +1,20 @@
+{
+  "name": "py-daytona-runner",
+  "version": "1.0.0",
+  "description": "Python Cloud Runner using Daytona and Cloudflare Workers",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "Alex Scott & BrowserVM",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240208.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^4.66.0"
+  },
+  "packageManager": "pnpm@10.23.0"
+}
