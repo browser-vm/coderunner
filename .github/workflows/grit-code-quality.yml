@@ -2,16 +2,16 @@ name: grit-code-quality
 
 on:
   push:
-    branches: ["main"] # Add other branches here if needed (e.g., "develop")
-  # Optional: Allows you to still run this manually if needed
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 env:
-  # Configuration that was previously handled via inputs
   TARGET_BRANCH_PREFIX: 'grit-fixes'
+  # Added the missing pattern configuration here
+  GRIT_PATTERN: 'js' 
 
 jobs:
   grit-quality:
@@ -31,7 +31,8 @@ jobs:
         id: grit-check
         continue-on-error: true
         run: |
-          grit check --level error || echo "GRIT_ERRORS=true" >> $GITHUB_OUTPUT
+          # Added "$GRIT_PATTERN" argument here
+          grit check "$GRIT_PATTERN" --level error || echo "GRIT_ERRORS=true" >> $GITHUB_OUTPUT
 
       - name: Apply Grit Fixes
         if: steps.grit-check.outputs.GRIT_ERRORS == 'true'
@@ -39,7 +40,8 @@ jobs:
         with:
           attempt_limit: 3
           attempt_delay: 2000
-          command: grit apply --force
+          # Added "$GRIT_PATTERN" argument here as well
+          command: grit apply "$GRIT_PATTERN" --force
 
       - name: Create Fix Branch
         if: steps.grit-check.outputs.GRIT_ERRORS == 'true'
@@ -49,7 +51,6 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git add -A
-          # Added [skip ci] to prevent infinite loops
           git commit -m "chore: apply Grit fixes [automated] [skip ci]" || exit 0
 
       - name: Push Changes
