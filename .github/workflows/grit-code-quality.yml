@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.THE_GITHUB_TOKEN }}
+          token: ${{ secrets.THE_GITHUB_TOKEN }} #Implement newer token
           fetch-depth: 0
       - name: Install Grit
         run: |
