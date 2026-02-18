@@ -18,7 +18,7 @@ on:
         type: boolean
         default: true
     secrets:
-      GITHUB_TOKEN:
+      THE_GITHUB_TOKEN:
         required: true
 permissions:
   contents: write
@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.THE_GITHUB_TOKEN }}
           fetch-depth: 0
       - name: Install Grit
         run: |
