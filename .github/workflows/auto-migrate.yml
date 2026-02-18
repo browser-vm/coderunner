@@ -1,0 +1,96 @@
+name: Auto-Migrate Breaking Changes
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  detect-and-migrate:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout PR Branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Fetch Dependabot Metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Detect Breaking Changes
+        id: breaking
+        run: |
+          if [[ "${{ steps.metadata.outputs.update-type }}" == "version-update:semver-major" ]]; then
+            echo "breaking=true" >> $GITHUB_OUTPUT
+            echo "package=${{ steps.metadata.outputs.dependency-names }}" >> $GITHUB_OUTPUT
+          else
+            echo "breaking=false" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Setup Node for Migration Tools
+        if: steps.breaking.outputs.breaking == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install Migration Tools
+        if: steps.breaking.outputs.breaking == 'true'
+        run: |
+          npm install -g jscodeshift @codemod/cli
+          
+      - name: Run Automated Migration
+        if: steps.breaking.outputs.breaking == 'true'
+        id: migrate
+        continue-on-error: true
+        run: |
+          PACKAGE="${{ steps.breaking.outputs.package }}"
+          
+          # Fetch package-specific codemod
+          codemod search "$PACKAGE" --json > codemods.json
+          CODEMOD_URL=$(jq -r '.[0].url' codemods.json)
+          
+          if [ "$CODEMOD_URL" != "null" ]; then
+            codemod run "$CODEMOD_URL" .
+          else
+            jscodeshift -t ./custom-codemods/${PACKAGE}.js src/
+          fi
+          
+      - name: Commit Migration Changes
+        if: steps.migrate.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore: auto-migrate breaking changes in ${{ steps.breaking.outputs.package }}" || exit 0
+          git push
+          
+      - name: Add Migration Comment
+        if: steps.migrate.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Automated migration applied for breaking changes'
+            })
+            
+      - name: Handle Migration Failure
+        if: steps.migrate.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️ Automated migration failed. Manual review required.'
+            })
+            core.setFailed('Migration failed - manual intervention needed')
